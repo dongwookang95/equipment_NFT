@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.1;
+pragma solidity ^0.8.3;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -14,32 +14,41 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 interface IERC20Upgradeable {
     function totalSupply() external view returns (uint256);
     function transfer(address recipient, uint amount) external returns (bool);
-    event Transfer(address indexed from, address indexed to, uint value);
+    event Transfer(
+        address indexed from, 
+        address indexed to, 
+        uint value
+        );
 }
 
 contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
     
-    
+    address private _sender;
     /// assigning a id to each NFTs
     using Counters for Counters.Counter;
     Counters.Counter private _tokenId;
 
-	string public _baseURI = "https://raw.githubusercontent.com/dongwookang95/equipment_NFT/master/other/turi.json/";
-	string public _contractURI ="https://raw.githubusercontent.com/dongwookang95/equipment_NFT/master/other/curi.json";
+	string public _baseURI;
+	string public _contractURI;
 
     /// in order to set the price of a equipment.
     uint256 public itemPrice; 
 
     
     function initialize() public initializer {
+        __Ownable_init_unchained();
+        __Context_init_unchained();
         itemPrice=0.1 ether;
     }
 
+    enum Category { 
+        Armor,
+        Sword,
+        Shield 
+    }
 
-    enum Category { Armor,Sword,Shield }
     Category public category;
     
-
     struct Equipments{
         string name;
         uint256 itemId;
@@ -51,11 +60,11 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
     /// minting 
     bool public publicMintEnabled;
     bool public holderMintEnabled;
-    uint256 mintPrice = 0.1 ether;
+
     /// public mintning functions
     function mintEquipment(uint8 _category) public payable checkMintInput(_category){
-        require(msg.value <= mintPrice, "You don't have enough ETH");
-        require(publicMintEnabled, "public mint is currently disabled");
+        require(msg.value <= itemPrice, "NOT enough ETH");
+        require(publicMintEnabled, "public mint is disabled");
         if(_category == 0){
             mintArmor();
         }else if(_category == 1){
@@ -70,10 +79,12 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
         }
     }
     /// holder minting functions after public sale
-    function holderMintEquipment(uint _id, uint8 _category) public payable checkMintInput(_category){
+    function holderMintEquipment(
+        uint _id, 
+        uint8 _category) public payable checkMintInput(_category){
         require(holderMintEnabled, "public mint is not done");
-        require(msg.value <= mintPrice, "You don't have enough ETH");
-        require(balanceOf(msg.sender, _id) > 0, "you are not owning any equipments");
+        require(msg.value <= itemPrice, "You don't have enough ETH");
+        require(balanceOf(msg.sender, _id) > 0, "Not owning this equipments");
         if(_category == 0){
             mintArmor();
         }else if(_category == 1){
@@ -86,7 +97,8 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
 
     function mintArmor() private{
         Equipments memory mintedEquipment = Equipments({
-            name : string(concat(bytes("Armor "), bytes(uint2str(_tokenId.current())))),
+            name : string(concat(bytes("Armor "), 
+            bytes(uint2str(_tokenId.current())))),
             itemId : _tokenId.current(),
             category : Category.Armor
         });
@@ -97,7 +109,8 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
 
     function mintSword() private{
         Equipments memory mintedEquipment = Equipments({
-            name : string(concat(bytes("Sword "), bytes(uint2str(_tokenId.current())))),
+            name : string(concat(bytes("Sword "), 
+            bytes(uint2str(_tokenId.current())))),
             itemId : _tokenId.current(),
             category : Category.Sword
         });
@@ -108,7 +121,8 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
 
     function mintShield() private{
         Equipments memory mintedEquipment = Equipments({
-            name : string(concat(bytes("Shield "), bytes(uint2str(_tokenId.current())))),
+            name : string(concat(bytes("Shield "), 
+            bytes(uint2str(_tokenId.current())))),
             itemId : _tokenId.current(),
             category : Category.Shield
         });
@@ -127,18 +141,17 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
 
     /// burn functions
     function burnShield(uint _tId) external {
-        //1. get the tokenId from holder
-        //2. check the map if the tokenId has Shield on Category attribute;
-        //노드와 interaction을 할 필요가 없다. 그냥 읽어오는거니까. storage를 쓰면 checkvalue라는 메모리를 더 쓰게되니까 여기서는 메모리가 맞다. 
         Equipments memory checkValue =  equipmentSupply[_tId];
-        //msg.sender가 verification 필요해
-        //msg.sender 해당 토큰 id의 balance를 확인해서 verification 가능
-        require(balanceOf(msg.sender, _tId)>0, "You are not owning this token");
-        require(checkValue.category == Category.Shield, "Provided tokenId is not shield. You cannot burn");
-        //The lose ratio shd't go above 100%
+        require(
+                balanceOf(msg.sender, _tId)>0, 
+                "You are not owning this token"
+                );
+        require(
+                checkValue.category == Category.Shield,
+                "Provided tokenId is not shield."
+                );
+
         uint8 loseRatio=2;
-        /// onlyowner를 써서 내가 테스트를 할땐 그냥 임의의 숫자로 하되, 오너가 아닐땐 VRF를 쓰게만들어주는 펑션.
-        /// below simpleRandom function is for testing purpose
         
         if(randomNumber() < loseRatio) {
             _burn(msg.sender, _tId, 1);
@@ -187,6 +200,7 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
 	function getItemPrice() public view returns (uint256) {
 		return itemPrice;
 	}
+
     // withdraw the earnings to pay for the artists & devs :)
 	function withdraw() public onlyOwner {
 		uint256 balance = address(this).balance;
@@ -195,14 +209,13 @@ contract Equipment is ERC1155Upgradeable, OwnableUpgradeable {
 
     // simple random number generator function 
     // needs to be replaced by chainlink vrf
-
     function randomNumber() public view returns(uint){
-        uint8 possibleRandomNumber =10;
+        uint8 amountRandomNumber =10;
         return uint(keccak256(abi.encodePacked(
             block.timestamp,
             block.difficulty, 
             msg.sender)
-            ))%possibleRandomNumber;
+            ))%amountRandomNumber;
     }
 
     //Other utility functions

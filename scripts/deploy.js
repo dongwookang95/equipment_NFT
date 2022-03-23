@@ -24,7 +24,7 @@ async function main() {
 
     EquipmentContractAddress = equipment.address;
 
-    await sleep(35000);
+    await sleep(40000);
     await hre.run("verify:verify", {
         address: equipment.address
     })
